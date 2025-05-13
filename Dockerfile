@@ -1,4 +1,4 @@
-FROM python:3.12-alpine3.20 as builder
+FROM python:3.12-alpine3.20 AS builder
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
@@ -15,7 +15,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 RUN pip install --no-cache dist/aidial_log_parser-*.whl
 
 
-FROM builder as test
+FROM builder AS test
 
 RUN poetry install --with test
 RUN poetry run pytest ./tests
