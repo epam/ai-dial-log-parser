@@ -256,8 +256,16 @@ def fill_missing(batch: pa.RecordBatch, schema: pa.Schema) -> pa.RecordBatch:
     return batch
 
 
-def extract_question(request_body: str) -> str | None:
-    request_json = json.loads(request_body)
+def extract_question(request_body: str, trace: pa.StructScalar | None) -> str | None:
+    try:
+        request_json = json.loads(request_body)
+    except json.JSONDecodeError:
+        logging.debug("Failed to decode JSON for request.body: %s", request_body)
+        # We do not want to disclose the request body in logs in non-debug mode
+        logging.warning(
+            "Failed to decode request.body JSON for line with trace=%s", trace
+        )
+        return None
     messages = request_json.get("messages", [])
     if not messages:
         return None
@@ -272,7 +280,14 @@ def extract_question(request_body: str) -> str | None:
 
 
 def extract_questions(batch: pa.RecordBatch) -> pa.RecordBatch:
-    questions = [extract_question(r["body"].as_py()) for r in batch["request"]]
+    requests = batch["request"]
+    traces = (
+        batch["trace"] if "trace" in batch.column_names else [None] * batch.num_rows
+    )
+    questions = [
+        extract_question(r["body"].as_py(), t)
+        for r, t in zip(requests, traces, strict=True)
+    ]
     return batch.append_column("question", questions)
 
 
@@ -280,7 +295,9 @@ def extract_answer(assembled_response: str) -> str | None:
     try:
         response_json = json.loads(assembled_response)
     except json.JSONDecodeError:
-        logging.debug("Failed to decode JSON: %s", assembled_response)
+        logging.debug(
+            "Failed to decode JSON for assembled_response: %s", assembled_response
+        )
         return None
     choices = response_json.get("choices", [])
     if not choices:
