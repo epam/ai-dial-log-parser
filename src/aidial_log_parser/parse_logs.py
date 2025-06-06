@@ -198,7 +198,7 @@ def add_deployment_name_from_uri(batch: pa.RecordBatch) -> pa.RecordBatch:
 
 
 def filter_invalid_field(
-    batch: pa.RecordBatch, traces: pa.Array, field_name: str = DEPLOYMENT_FIELD_NAME
+    batch: pa.RecordBatch, traces: pa.Array, field_name: str
 ) -> pa.RecordBatch:
     filter_mask: pa.BooleanArray = batch[field_name].is_valid()
     if pc.all(filter_mask).as_py():  # type: ignore [reportAttributeAccessIssue]
@@ -211,7 +211,7 @@ def filter_invalid_field(
     )
     if isDebugEnabled():
         for trace in traces.filter(pc.invert(filter_mask)):  # type: ignore [reportAttributeAccessIssue]
-            logging.debug("Filtered out empty %s with trace=%s", field_name, trace)
+            logging.debug(f"Filtered out empty {field_name} with trace={trace}")
     return batch_filtered
 
 
@@ -270,8 +270,7 @@ def extract_question(request_body: str, trace: pa.StructScalar | None) -> str | 
         logging.debug("Failed to decode JSON for request.body: %s", request_body)
         # We do not want to disclose the request body in logs in non-debug mode
         logging.warning(
-            "Failed to decode request.body JSON for line with trace=%s",
-            trace,
+            f"Failed to decode request.body JSON for line with trace={trace}"
         )
         return None
     messages = request_json.get("messages", [])
@@ -307,8 +306,7 @@ def extract_answer(
         )
         # We do not want to disclose the response content in logs in non-debug mode
         logging.warning(
-            "Failed to decode assembled_response JSON for line with trace=%s",
-            trace,
+            "Failed to decode assembled_response JSON for line with trace={trace}"
         )
         return None
     choices = response_json.get("choices", [])
