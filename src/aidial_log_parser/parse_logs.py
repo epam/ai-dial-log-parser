@@ -194,24 +194,25 @@ def add_deployment_name_from_uri(batch: pa.RecordBatch) -> pa.RecordBatch:
         parse_deployment_name(r["uri"].as_py()) for r in batch["request"]
     ]
     new_batch = batch.add_column(0, DEPLOYMENT_FIELD_NAME, deployment_name)
+    return new_batch
 
-    rows_before_filter = new_batch.num_rows
-    new_batch_filtered = new_batch.filter(
-        pc.invert(new_batch[DEPLOYMENT_FIELD_NAME].is_null())  # type: ignore [reportAttributeAccessIssue]
+
+def filter_invalid_field(
+    batch: pa.RecordBatch, traces: pa.Array, field_name: str
+) -> pa.RecordBatch:
+    filter_mask: pa.BooleanArray = batch[field_name].is_valid()
+    if pc.all(filter_mask).as_py():  # type: ignore [reportAttributeAccessIssue]
+        return batch
+
+    batch_filtered = batch.filter(filter_mask)
+
+    logging.warning(
+        f"Removed {batch.num_rows - batch_filtered.num_rows} rows with invalid {field_name}"
     )
-
-    bad_rows = rows_before_filter - new_batch_filtered.num_rows
-    if bad_rows:
-        logging.warning(f"Removed {bad_rows} rows with invalid {DEPLOYMENT_FIELD_NAME}")
-        if isDebugEnabled():
-            bad_uris = [
-                r["uri"].as_py()
-                for r in new_batch.filter(new_batch[DEPLOYMENT_FIELD_NAME].is_null())[
-                    "request"
-                ]
-            ]
-            logging.debug(f"Bad uris: {bad_uris}")
-    return new_batch_filtered
+    if isDebugEnabled():
+        for trace in traces.filter(pc.invert(filter_mask)):  # type: ignore [reportAttributeAccessIssue]
+            logging.debug(f"Filtered out empty {field_name} with trace={trace}")
+    return batch_filtered
 
 
 def fill_missing_nested(column: pa.Array, target_type: pa.DataType) -> pa.StructArray:
@@ -256,6 +257,12 @@ def fill_missing(batch: pa.RecordBatch, schema: pa.Schema) -> pa.RecordBatch:
     return batch
 
 
+def get_traces_column(batch: pa.RecordBatch) -> pa.Array:
+    if "trace" in batch.column_names:
+        return batch["trace"]
+    return pa.array([None] * batch.num_rows)
+
+
 def extract_question(request_body: str, trace: pa.StructScalar | None) -> str | None:
     try:
         request_json = json.loads(request_body)
@@ -263,7 +270,7 @@ def extract_question(request_body: str, trace: pa.StructScalar | None) -> str | 
         logging.debug("Failed to decode JSON for request.body: %s", request_body)
         # We do not want to disclose the request body in logs in non-debug mode
         logging.warning(
-            "Failed to decode request.body JSON for line with trace=%s", trace
+            f"Failed to decode request.body JSON for line with trace={trace}"
         )
         return None
     messages = request_json.get("messages", [])
@@ -279,11 +286,8 @@ def extract_question(request_body: str, trace: pa.StructScalar | None) -> str | 
     return None
 
 
-def extract_questions(batch: pa.RecordBatch) -> pa.RecordBatch:
+def extract_questions(batch: pa.RecordBatch, traces: pa.Array) -> pa.RecordBatch:
     requests = batch["request"]
-    traces = (
-        batch["trace"] if "trace" in batch.column_names else [None] * batch.num_rows
-    )
     questions = [
         extract_question(r["body"].as_py(), t)
         for r, t in zip(requests, traces, strict=True)
@@ -291,12 +295,18 @@ def extract_questions(batch: pa.RecordBatch) -> pa.RecordBatch:
     return batch.append_column("question", questions)
 
 
-def extract_answer(assembled_response: str) -> str | None:
+def extract_answer(
+    assembled_response: str, trace: pa.StructScalar | None
+) -> str | None:
     try:
         response_json = json.loads(assembled_response)
     except json.JSONDecodeError:
         logging.debug(
             "Failed to decode JSON for assembled_response: %s", assembled_response
+        )
+        # We do not want to disclose the response content in logs in non-debug mode
+        logging.warning(
+            "Failed to decode assembled_response JSON for line with trace={trace}"
         )
         return None
     choices = response_json.get("choices", [])
@@ -305,10 +315,14 @@ def extract_answer(assembled_response: str) -> str | None:
     return choices[0].get("message", {}).get("content")
 
 
-def extract_answers(batch: pa.RecordBatch) -> pa.RecordBatch:
+def extract_answers(batch: pa.RecordBatch, traces: pa.Array) -> pa.RecordBatch:
     if "assembled_response" not in batch.column_names:
         return batch
-    answers = [extract_answer(r.as_py()) for r in batch["assembled_response"]]
+    assembled_responses = batch["assembled_response"]
+    answers = [
+        extract_answer(r.as_py(), t)
+        for r, t in zip(assembled_responses, traces, strict=True)
+    ]
     return batch.append_column("answer", answers)
 
 
@@ -332,9 +346,16 @@ def process_batches(
 
         if DEPLOYMENT_FIELD_NAME not in batch.column_names:
             batch = add_deployment_name_from_uri(batch)
+
+        traces = get_traces_column(batch)
+
+        batch = filter_invalid_field(batch, traces, DEPLOYMENT_FIELD_NAME)
+
+        # Some rows may be removed by the filter, so we need to get new traces column
+        traces = get_traces_column(batch)
         batch = batch.append_column("date", [date] * batch.num_rows)
-        batch = extract_questions(batch)
-        batch = extract_answers(batch)
+        batch = extract_questions(batch, traces)
+        batch = extract_answers(batch, traces)
 
         batch = fill_missing(batch, schema)
         batch.validate(full=True)
