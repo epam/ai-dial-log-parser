@@ -158,10 +158,14 @@ def read_data(input_files: list[InputFile], filesystem):
     with click.progressbar(input_files, label="Reading files", show_pos=True) as files:
         for input_file in files:
             logging.info(f"Reading file {input_file.path}")
-            with filesystem.open_input_stream(input_file.path) as f:
-                table = pj.read_json(f, read_options)
-                for batch in table.to_batches():
-                    yield input_file.date, batch
+
+            try:
+                with filesystem.open_input_stream(input_file.path) as f:
+                    table = pj.read_json(f, read_options)
+                    for batch in table.to_batches():
+                        yield input_file.date, batch
+            except:
+                logging.exception(f"Error in parsing file: {input_file.path}")
 
 
 def list_files(
