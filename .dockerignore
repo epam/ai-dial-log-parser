@@ -18,3 +18,4 @@
 **/*.pyc
 Dockerfile
 dist
+.ort.yml
