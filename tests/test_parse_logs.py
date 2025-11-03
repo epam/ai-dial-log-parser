@@ -355,3 +355,65 @@ def test_parse_logs_no_deployment(caplog):
         "Filtered out empty deployment with trace=[('trace_id', '1'), ('core_span_id', '1')]"
         in caplog.text
     )
+
+
+def test_parse_logs_assembled_response_list(caplog):
+    fs = MemoryFileSystem()
+    fs.mkdir("/logs5")
+    fs.mkdir("/parsed_logs5")
+
+    with fs.open(
+        "/logs5/date=2023-11-061699285645-11111111-2222-3333-4444-555555555555.log", "w"
+    ) as f:
+        data_route = {
+            "request": {
+                "protocol": "HTTP/1.1",
+                "method": "POST",
+                "uri": "/v1/custom_route/job",
+                "time": "2023-11-06T01:23:45.678",
+                "body": json.dumps(
+                    {
+                        "some_data": ["https://www.example.com/"],
+                    }
+                ),
+            },
+            "trace": {"trace_id": "1", "core_span_id": "1"},
+            "response": {
+                "status": 200,
+                "body": '["some", "custom"," data"]',
+            },
+            "deployment": "custom_app",
+            "assembled_response": '["some", "custom"," data"]',
+        }
+        json.dump(data_route, f)
+
+    date = pa.scalar(datetime.date(2023, 11, 6), type=pa.date32())
+    parse_logs("memory://logs5/", "memory://parsed_logs5/", date=date)
+
+    result = ds.dataset(
+        "/parsed_logs5/",
+        format="parquet",
+        partitioning=ds.partitioning(
+            schema=pa.schema(
+                [
+                    pa.field("deployment", pa.string()),
+                    pa.field("date", pa.date32()),
+                ]
+            )
+        ),
+        filesystem=fs,
+    ).to_table()
+
+    assert result.column("deployment").to_pylist() == ["custom_app"]
+    assert result.column("date").to_pylist() == [datetime.date(2023, 11, 6)]
+    assert result.column("assembled_response").to_pylist() == [
+        '["some", "custom"," data"]'
+    ]
+    assert result.column("question").to_pylist() == [None]
+    assert result.column("answer").to_pylist() == [None]
+
+    # Check log messages
+    assert (
+        "Root of the assembled_response JSON is not an object for line "
+        "with trace=[('trace_id', '1'), ('core_span_id', '1')]" in caplog.text
+    )
