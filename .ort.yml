@@ -1,0 +1,27 @@
+---
+excludes:
+  scopes:
+    - pattern: "lint"
+      reason: "DEV_DEPENDENCY_OF"
+      comment: "Packages for static code analysis only."
+    - pattern: "test"
+      reason: "TEST_DEPENDENCY_OF"
+      comment: "Packages for testing only."
+    - pattern: "nox"
+      reason: "TEST_DEPENDENCY_OF"
+      comment: "Packages for testing only."
+license_choices:
+  repository_license_choices:
+    - given: FTL OR GPL-2.0-or-later
+      choice: FTL
+resolutions:
+  rule_violations:
+    - message: ".*PyPI::fsspec:2024\\.6\\.0.*"
+      reason: "CANT_FIX_EXCEPTION"
+      comment: "BSD 3-Clause New or Revised License: https://github.com/fsspec/filesystem_spec/blob/2024.6.0/LICENSE"
+    - message: ".*PyPI::python-dateutil:2\\.9\\.0\\.post0.*"
+      reason: "CANT_FIX_EXCEPTION"
+      comment: "BSD 3-Clause New or Revised License: https://github.com/dateutil/dateutil/blob/2.9.0/LICENSE"
+    - message: ".*PyPI::setuptools:78\\.1\\.1.*"
+      reason: "CANT_FIX_EXCEPTION"
+      comment: "MIT License: https://github.com/pypa/setuptools/blob/v78.1.1/LICENSE"
