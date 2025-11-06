@@ -306,10 +306,16 @@ def extract_answer(
         )
         # We do not want to disclose the response content in logs in non-debug mode
         logging.warning(
-            "Failed to decode assembled_response JSON for line with trace={trace}"
+            f"Failed to decode assembled_response JSON for line with trace={trace}"
         )
         return None
-    choices = response_json.get("choices", [])
+    try:
+        choices = response_json.get("choices", [])
+    except AttributeError:
+        logging.warning(
+            f"Root of the assembled_response JSON is not an object for line with trace={trace}"
+        )
+        return None
     if not choices:
         return None
     return choices[0].get("message", {}).get("content")
