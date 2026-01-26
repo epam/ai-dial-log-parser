@@ -153,7 +153,8 @@ class InputFile:
 
 def read_data(input_files: list[InputFile], filesystem):
     read_options = pj.ReadOptions(
-        block_size=64 << 20
+        use_threads=False,
+        block_size=64 << 20,
     )  # 64MiB, single field should not exceed 2 blocks
     with click.progressbar(input_files, label="Reading files", show_pos=True) as files:
         for input_file in files:
