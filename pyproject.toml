@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "aidial-log-parser"
-version = "0.3.0rc"
+version = "0.4.0rc"
 description = "Tool to parse ai-dial log files and repack it to parquet dataset."
 authors = ["EPAM RAIL <SpecialEPM-DIALDevTeam@epam.com>"]
 license = "Apache-2.0"
@@ -17,6 +17,7 @@ fsspec = "^2024.3.1"
 pyarrow = "^20.0.0"
 s3fs = "^2024.3.1"
 click = "^8.1.7"
+adlfs = "^2025.8.0"
 
 [tool.poetry.group.test.dependencies]
 pytest = "^8.1.1"
