@@ -50,7 +50,7 @@ Following environment variables could be used for the configuration:
 |`DIAL_LOG_PARSER_DATE`| optional | Date to process logs for (default: yesterday) |
 |`DIAL_LOG_PARSER_DEBUG`| optional | Enables debug logging |
 |`DIAL_LOG_PARSER_FILENAME_REGEX`| optional | Allows to override the regex to match log file names (default: `date=(\d{4}-\d{2}-\d{2})(\d+)-(\w{8}-\w{4}-\w{4}-\w{4}-\w{12}).log(.gz)?`) |
-|`DIAL_LOG_PARSER_INPUT_COMPRESSION`| optional | Compression type for input log files. Possible values: 'detect' - detect compression from file extension (default), 'none' - no compression, or well known compression types [supported by pyarrow](https://arrow.apache.org/docs/python/generated/pyarrow.fs.FileSystem.html#pyarrow.fs.FileSystem.open_input_file) (like 'gzip'). |
+|`DIAL_LOG_PARSER_INPUT_COMPRESSION`| optional | Compression type for input log files. Possible values: 'detect' - detect compression from file extension (default), 'none' - no compression, or well known compression types [supported by pyarrow](https://arrow.apache.org/docs/python/generated/pyarrow.fs.FileSystem.html#pyarrow.fs.FileSystem.open_input_stream) (like 'gzip'). |
 
 ### Storage specific environment variables
 
