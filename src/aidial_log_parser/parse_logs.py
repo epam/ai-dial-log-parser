@@ -27,6 +27,8 @@ DEFAULT_FILENAME_REGEX = (
 
 DEFAULT_FILENAME_REGEX_COMPILED = re.compile(DEFAULT_FILENAME_REGEX)
 
+DEFAULT_INPUT_COMPRESSION = "detect"
+
 DEPLOYMENT_FIELD_NAME = "deployment"
 
 OUT_PARTITIONING = ds.partitioning(
@@ -151,7 +153,11 @@ class InputFile:
         )
 
 
-def read_data(input_files: list[InputFile], filesystem):
+def read_data(
+    input_files: list[InputFile],
+    filesystem,
+    compression: str | None = DEFAULT_INPUT_COMPRESSION,
+):
     read_options = pj.ReadOptions(
         use_threads=False,
         block_size=64 << 20,
@@ -159,7 +165,9 @@ def read_data(input_files: list[InputFile], filesystem):
     with click.progressbar(input_files, label="Reading files", show_pos=True) as files:
         for input_file in files:
             logging.info(f"Reading file {input_file.path}")
-            with filesystem.open_input_stream(input_file.path) as f:
+            with filesystem.open_input_stream(
+                input_file.path, compression=compression
+            ) as f:
                 table = pj.read_json(f, read_options)
                 for batch in table.to_batches():
                     yield input_file.date, batch
@@ -381,6 +389,7 @@ def parse_logs(
     output_dir: str,
     date: pa.Date32Scalar,
     filename_regex: re.Pattern = DEFAULT_FILENAME_REGEX_COMPILED,
+    input_compression: str | None = DEFAULT_INPUT_COMPRESSION,
 ):
     in_fs_fsspec, input_dir_path = fsspec.url_to_fs(input_dir)
     in_fs = fs.PyFileSystem(fs.FSSpecHandler(in_fs_fsspec))
@@ -396,7 +405,11 @@ def parse_logs(
     if not out_fs.get_file_info(output_dir_path):
         raise FileNotFoundError(f"Output directory {output_dir} does not exist")
 
-    input_batches_iter = read_data(input_files, filesystem=in_fs)
+    input_batches_iter = read_data(
+        input_files,
+        filesystem=in_fs,
+        compression=input_compression,
+    )
     logging.debug(f"Output schema: {OUT_SCHEMA}")
 
     output_batches_iter = process_batches(input_batches_iter, OUT_SCHEMA)
@@ -411,6 +424,16 @@ def parse_logs(
         use_threads=False,
         file_visitor=file_visitor,
     )
+
+
+def parse_compression_param(
+    ctx: click.Context,
+    param: click.Parameter,
+    value: str,
+) -> str | None:
+    if value.lower() == "none":
+        return None
+    return value
 
 
 @click.command()
@@ -455,7 +478,20 @@ def parse_logs(
     show_default=True,
     show_envvar=True,
 )
-def main(input, output, date, debug, filename_regex):
+@click.option(
+    "--input-compression",
+    type=str,
+    help="""Compression type for input log files. Possible values:
+        'detect' - detect compression from file extension (default),
+        'none' - no compression,
+        or well known compression types supported by pyarrow (like 'gzip').
+        """,
+    callback=parse_compression_param,
+    default=DEFAULT_INPUT_COMPRESSION,
+    show_default=True,
+    show_envvar=True,
+)
+def main(input, output, date, debug, filename_regex, input_compression):
     """Parse dial log files and repack it to parquet dataset."""
     if debug:
         logging.getLogger().setLevel(logging.DEBUG)
@@ -465,7 +501,11 @@ def main(input, output, date, debug, filename_regex):
     logging.info(f"Date: {date}")
     filename_regex_compiled = re.compile(filename_regex)
     parse_logs(
-        input, output, pa.scalar(date, type=pa.date32()), filename_regex_compiled
+        input,
+        output,
+        pa.scalar(date, type=pa.date32()),
+        filename_regex_compiled,
+        input_compression,
     )
 
 

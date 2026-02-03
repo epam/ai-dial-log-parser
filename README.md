@@ -50,6 +50,7 @@ Following environment variables could be used for the configuration:
 |`DIAL_LOG_PARSER_DATE`| optional | Date to process logs for (default: yesterday) |
 |`DIAL_LOG_PARSER_DEBUG`| optional | Enables debug logging |
 |`DIAL_LOG_PARSER_FILENAME_REGEX`| optional | Allows to override the regex to match log file names (default: `date=(\d{4}-\d{2}-\d{2})(\d+)-(\w{8}-\w{4}-\w{4}-\w{4}-\w{12}).log(.gz)?`) |
+|`DIAL_LOG_PARSER_INPUT_COMPRESSION`| optional | Compression type for input log files. Possible values: 'detect' - detect compression from file extension (default), 'none' - no compression, or well known compression types [supported by pyarrow](https://arrow.apache.org/docs/python/generated/pyarrow.fs.FileSystem.html#pyarrow.fs.FileSystem.open_input_file) (like 'gzip'). |
 
 ### Storage specific environment variables
 
@@ -68,19 +69,19 @@ Usage: python -m aidial_log_parser.parse_logs [OPTIONS]
   Parse dial log files and repack it to parquet dataset.
 
 Options:
-  -i, --input TEXT       Path to input log directory  [env var:
-                         DIAL_LOG_PARSER_INPUT; required]
-  -o, --output TEXT      Path to output log directory  [env var:
-                         DIAL_LOG_PARSER_OUTPUT; required]
-  -d, --date [%Y-%m-%d]  Date to process logs for  [env var:
-                         DIAL_LOG_PARSER_DATE; default: 2024-06-09]
-  --debug                Enable debug logging  [env var:
-                         DIAL_LOG_PARSER_DEBUG]
-  --filename-regex TEXT  Regex to match log file names  [env var:
-                         DIAL_LOG_PARSER_FILENAME_REGEX; default: date=(\d{4}-
-                         \d{2}-\d{2})(\d+)-(\w{8}-\w{4}-\w{4}-\w{4}-\w{12}).lo
-                         g(.gz)?]
-  --help                 Show this message and exit.
+  -i, --input TEXT          Path to input log directory  [env var: DIAL_LOG_PARSER_INPUT; required]
+  -o, --output TEXT         Path to output log directory  [env var: DIAL_LOG_PARSER_OUTPUT; required]
+  -d, --date [%Y-%m-%d]     Date to process logs for  [env var: DIAL_LOG_PARSER_DATE; default: 2026-02-02]
+  --debug                   Enable debug logging  [env var: DIAL_LOG_PARSER_DEBUG]
+  --filename-regex TEXT     Regex to match log file names
+                            [env var: DIAL_LOG_PARSER_FILENAME_REGEX; default: date=(\d{4}-\d{2}-\d{2})(\d+)-(\w{8}-\w{4}-\w{4}-\w{4}-\w{12}).log(.gz)?]
+  --input-compression TEXT  Compression type for input log files.
+                            Possible values:
+                            'detect' - detect compression from file extension (default),
+                            'none' - no compression,
+                            or well known compression types supported by pyarrow (like 'gzip').
+                            [env var: DIAL_LOG_PARSER_INPUT_COMPRESSION; default: detect]
+  --help                    Show this message and exit.
 ```
 
 
