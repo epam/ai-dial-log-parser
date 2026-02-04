@@ -50,17 +50,27 @@ Following environment variables could be used for the configuration:
 |`DIAL_LOG_PARSER_DATE`| optional | Date to process logs for (default: yesterday) |
 |`DIAL_LOG_PARSER_DEBUG`| optional | Enables debug logging |
 |`DIAL_LOG_PARSER_FILENAME_REGEX`| optional | Allows to override the regex to match log file names (default: `date=(\d{4}-\d{2}-\d{2})(\d+)-(\w{8}-\w{4}-\w{4}-\w{4}-\w{12}).log(.gz)?`) |
-|`DIAL_LOG_PARSER_INPUT_COMPRESSION`| optional | Compression type for input log files. Possible values: 'detect' - detect compression from file extension (default), 'none' - no compression, or well known compression types [supported by pyarrow](https://arrow.apache.org/docs/python/generated/pyarrow.fs.FileSystem.html#pyarrow.fs.FileSystem.open_input_stream) (like 'gzip'). |
+|`DIAL_LOG_PARSER_INPUT_COMPRESSION`| optional | Compression type for input log files. Possible values: <br/> `infer` - infer compression from file extension (default), <br/> `none` - no compression, <br/> or well known compression types [supported by fsspec](https://filesystem-spec.readthedocs.io/en/latest/features.html#transparent-text-mode-and-compression) (like `gzip`). |
+|`DIAL_LOG_PARSER_INPUT_CACHE`| optional | Cache type for input filesystem. Possible values: <br/> `default` - use default caching behavior (default), <br/> `none` - disable caching, <br/> or cache types supported by fsspec (like `readahead`, `bytes`, etc.). <br/> See https://filesystem-spec.readthedocs.io/en/latest/api.html#read-buffering and specific filesystem documentation for details. |
 
 ### Storage specific environment variables
 
 Specific storage implementations may require additional environment variables to be set.
 
-For example, for S3, AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY may be required. See https://s3fs.readthedocs.io/en/latest/#credentials
+For example, for S3, `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` may be required. See https://s3fs.readthedocs.io/en/latest/#credentials
 
 Fsspec compatible implementations should be supported (may require to install the extra packages to the docker).
 Check the list [Built-in Fsspec Implementations](https://filesystem-spec.readthedocs.io/en/latest/api.html#implementations) and [Other Known Fsspec Implementations](https://filesystem-spec.readthedocs.io/en/latest/api.html#external-implementations) for more details.
 
+#### Azure Blob Storage
+
+For Azure Blob Storage, see [adlfs documentation](https://github.com/fsspec/adlfs?tab=readme-ov-file#setting-credentials) for the list of required environment variables.
+
+**Note**: `AZURE_STORAGE_ANON` should be explicitly set to `false` to use authenticated access. The default value in the adlfs library is `true` which may lead to authentication issues when trying to access private blobs.
+
+If you store the logs compressed as `.logs.gz` and the `Content-Encoding` header for the blob is set to `gzip`, you may encounter an issue where adlfs returns decompressed file content, but reports the file size for the compressed file. This confuses the caching and decompression logic in fsspec and may lead to an error when the parser tries to read the file content.
+
+To work around this issue, you can set the `DIAL_LOG_PARSER_INPUT_COMPRESSION=none` to explicitly disable compression in the parser even if the file name ends with `.gz`, and set `DIAL_LOG_PARSER_INPUT_CACHE=none` to disable caching to avoid issues with the file size mismatch. This way the parser will read the file content as is without trying to decompress it or cache it.
 
 ### Command-line arguments
 ```
@@ -77,10 +87,17 @@ Options:
                             [env var: DIAL_LOG_PARSER_FILENAME_REGEX; default: date=(\d{4}-\d{2}-\d{2})(\d+)-(\w{8}-\w{4}-\w{4}-\w{4}-\w{12}).log(.gz)?]
   --input-compression TEXT  Compression type for input log files.
                             Possible values:
-                            'detect' - detect compression from file extension (default),
+                            'infer' - infer compression from file extension (default),
                             'none' - no compression,
-                            or well known compression types supported by pyarrow (like 'gzip').
-                            [env var: DIAL_LOG_PARSER_INPUT_COMPRESSION; default: detect]
+                            or well known compression types supported by fsspec (like 'gzip').
+                            [env var: DIAL_LOG_PARSER_INPUT_COMPRESSION; default: infer]
+  --input-cache TEXT        Cache type for input filesystem. Possible values:
+                            'default' - use default caching behavior (default),
+                            'none' - disable caching,
+                            or cache types supported by fsspec (like 'readahead', 'bytes', etc.).
+                            See https://filesystem-spec.readthedocs.io/en/latest/api.html#read-buffering and specific filesystem documentation
+                            for details.
+                            [env var: DIAL_LOG_PARSER_INPUT_CACHE; default: default]
   --help                    Show this message and exit.
 ```
 

@@ -27,7 +27,11 @@ DEFAULT_FILENAME_REGEX = (
 
 DEFAULT_FILENAME_REGEX_COMPILED = re.compile(DEFAULT_FILENAME_REGEX)
 
-DEFAULT_INPUT_COMPRESSION = "detect"
+DEFAULT_INPUT_COMPRESSION = "infer"
+
+DEFAULT_READ_KWARGS = {
+    "compression": DEFAULT_INPUT_COMPRESSION,
+}
 
 DEPLOYMENT_FIELD_NAME = "deployment"
 
@@ -155,8 +159,8 @@ class InputFile:
 
 def read_data(
     input_files: list[InputFile],
-    filesystem,
-    compression: str | None = DEFAULT_INPUT_COMPRESSION,
+    filesystem: fsspec.AbstractFileSystem,
+    **kwargs,
 ):
     read_options = pj.ReadOptions(
         use_threads=False,
@@ -165,9 +169,7 @@ def read_data(
     with click.progressbar(input_files, label="Reading files", show_pos=True) as files:
         for input_file in files:
             logging.info(f"Reading file {input_file.path}")
-            with filesystem.open_input_stream(
-                input_file.path, compression=compression
-            ) as f:
+            with filesystem.open(input_file.path, mode="rb", **kwargs) as f:
                 table = pj.read_json(f, read_options)
                 for batch in table.to_batches():
                     yield input_file.date, batch
@@ -175,7 +177,7 @@ def read_data(
 
 def list_files(
     input_dir: str,
-    filesystem,
+    filesystem: fs.PyFileSystem,
     log_date: pa.Date32Scalar,
     filename_regex: re.Pattern,
 ) -> list[InputFile]:
@@ -389,7 +391,7 @@ def parse_logs(
     output_dir: str,
     date: pa.Date32Scalar,
     filename_regex: re.Pattern = DEFAULT_FILENAME_REGEX_COMPILED,
-    input_compression: str | None = DEFAULT_INPUT_COMPRESSION,
+    read_kwargs: dict = DEFAULT_READ_KWARGS,
 ):
     in_fs_fsspec, input_dir_path = fsspec.url_to_fs(input_dir)
     in_fs = fs.PyFileSystem(fs.FSSpecHandler(in_fs_fsspec))
@@ -407,8 +409,8 @@ def parse_logs(
 
     input_batches_iter = read_data(
         input_files,
-        filesystem=in_fs,
-        compression=input_compression,
+        filesystem=in_fs_fsspec,
+        **read_kwargs,
     )
     logging.debug(f"Output schema: {OUT_SCHEMA}")
 
@@ -434,6 +436,21 @@ def parse_compression_param(
     if value.lower() == "none":
         return None
     return value
+
+
+def parse_cache_param(
+    ctx: click.Context,
+    param: click.Parameter,
+    value: str,
+) -> dict:
+    # Dict is used to distinguish between default and None value
+    # Setting cache_type to None disables caching in fsspec
+    # But not passing cache_type uses the default cache_type parameter
+    # specific to the filesystem implementation
+    if value.lower() == "default":
+        return {}
+
+    return {"cache_type": value}
 
 
 @click.command()
@@ -482,16 +499,39 @@ def parse_compression_param(
     "--input-compression",
     type=str,
     help="""Compression type for input log files. Possible values:
-        'detect' - detect compression from file extension (default),
+        'infer' - infer compression from file extension (default),
         'none' - no compression,
-        or well known compression types supported by pyarrow (like 'gzip').
+        or well known compression types supported by fsspec (like 'gzip').
         """,
     callback=parse_compression_param,
     default=DEFAULT_INPUT_COMPRESSION,
     show_default=True,
     show_envvar=True,
 )
-def main(input, output, date, debug, filename_regex, input_compression):
+@click.option(
+    "--input-cache",
+    type=str,
+    help="""Cache type for input filesystem. Possible values:
+        'default' - use default caching behavior (default),
+        'none' - disable caching,
+        or cache types supported by fsspec (like 'readahead', 'bytes', etc.).
+        See https://filesystem-spec.readthedocs.io/en/latest/api.html#read-buffering
+        and specific filesystem documentation for details.
+    """,
+    default="default",
+    show_default=True,
+    show_envvar=True,
+    callback=parse_cache_param,
+)
+def main(
+    input: str,
+    output: str,
+    date: datetime.datetime,
+    debug: bool,
+    filename_regex: str,
+    input_compression: str,
+    input_cache: dict,
+):
     """Parse dial log files and repack it to parquet dataset."""
     if debug:
         logging.getLogger().setLevel(logging.DEBUG)
@@ -505,7 +545,10 @@ def main(input, output, date, debug, filename_regex, input_compression):
         output,
         pa.scalar(date, type=pa.date32()),
         filename_regex_compiled,
-        input_compression,
+        read_kwargs={
+            "compression": input_compression,
+            **input_cache,
+        },
     )
 
 
