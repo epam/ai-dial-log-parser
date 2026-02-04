@@ -51,7 +51,7 @@ Following environment variables could be used for the configuration:
 |`DIAL_LOG_PARSER_DEBUG`| optional | Enables debug logging |
 |`DIAL_LOG_PARSER_FILENAME_REGEX`| optional | Allows to override the regex to match log file names (default: `date=(\d{4}-\d{2}-\d{2})(\d+)-(\w{8}-\w{4}-\w{4}-\w{4}-\w{12}).log(.gz)?`) |
 |`DIAL_LOG_PARSER_INPUT_COMPRESSION`| optional | Compression type for input log files. Possible values: <br/> `infer` - infer compression from file extension (default), <br/> `none` - no compression, <br/> or well known compression types [supported by fsspec](https://filesystem-spec.readthedocs.io/en/latest/features.html#transparent-text-mode-and-compression) (like `gzip`). |
-|`DIAL_LOG_PARSER_INPUT_CACHE`| optional | Cache type for input filesystem. Possible values: <br/> `default` - use default caching behavior (default), <br/> `none` - disable caching, <br/> or cache types supported by fsspec (like `readahead`, `bytes`, etc.). <br/> See https://filesystem-spec.readthedocs.io/en/latest/api.html#read-buffering and specific filesystem documentation for details. |
+|`DIAL_LOG_PARSER_INPUT_CACHE`| optional | Cache type for input filesystem. Possible values: <br/> `none` - disable caching, <br/> or cache types supported by fsspec (like `readahead`, `bytes`, etc.). <br/> If unset (default), use filesystem specific default caching behavior. <br/> See https://filesystem-spec.readthedocs.io/en/latest/api.html#read-buffering and specific filesystem documentation for details. |
 
 ### Storage specific environment variables
 
@@ -90,14 +90,15 @@ Options:
                             'infer' - infer compression from file extension (default),
                             'none' - no compression,
                             or well known compression types supported by fsspec (like 'gzip').
-                            [env var: DIAL_LOG_PARSER_INPUT_COMPRESSION; default: infer]
+                            [env var: DIAL_LOG_PARSER_INPUT_COMPRESSION]
   --input-cache TEXT        Cache type for input filesystem. Possible values:
                             'default' - use default caching behavior (default),
                             'none' - disable caching,
                             or cache types supported by fsspec (like 'readahead', 'bytes', etc.).
+                            If unset (default), use filesystem specific default caching behavior.
                             See https://filesystem-spec.readthedocs.io/en/latest/api.html#read-buffering and specific filesystem documentation
                             for details.
-                            [env var: DIAL_LOG_PARSER_INPUT_CACHE; default: default]
+                            [env var: DIAL_LOG_PARSER_INPUT_CACHE]
   --help                    Show this message and exit.
 ```
 

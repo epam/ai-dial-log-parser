@@ -14,6 +14,8 @@ import pyarrow.dataset as ds
 import pyarrow.json as pj
 from pyarrow import fs
 
+from aidial_log_parser.input_parameter import InputParameter
+
 ENVVAR_PREFIX = "DIAL_LOG_PARSER"
 
 
@@ -428,31 +430,6 @@ def parse_logs(
     )
 
 
-def parse_compression_param(
-    ctx: click.Context,
-    param: click.Parameter,
-    value: str,
-) -> str | None:
-    if value.lower() == "none":
-        return None
-    return value
-
-
-def parse_cache_param(
-    ctx: click.Context,
-    param: click.Parameter,
-    value: str,
-) -> dict:
-    # Dict is used to distinguish between default and None value
-    # Setting cache_type to None disables caching in fsspec
-    # But not passing cache_type uses the default cache_type parameter
-    # specific to the filesystem implementation
-    if value.lower() == "default":
-        return {}
-
-    return {"cache_type": value}
-
-
 @click.command()
 @click.option(
     "-i",
@@ -497,31 +474,29 @@ def parse_cache_param(
 )
 @click.option(
     "--input-compression",
-    type=str,
+    type=InputParameter(),
     help="""Compression type for input log files. Possible values:
         'infer' - infer compression from file extension (default),
         'none' - no compression,
         or well known compression types supported by fsspec (like 'gzip').
         """,
-    callback=parse_compression_param,
-    default=DEFAULT_INPUT_COMPRESSION,
-    show_default=True,
+    default=InputParameter.Unset(),
+    show_default=False,
     show_envvar=True,
 )
 @click.option(
     "--input-cache",
-    type=str,
+    type=InputParameter(),
     help="""Cache type for input filesystem. Possible values:
-        'default' - use default caching behavior (default),
         'none' - disable caching,
         or cache types supported by fsspec (like 'readahead', 'bytes', etc.).
+        If unset (default), use filesystem specific default caching behavior.
         See https://filesystem-spec.readthedocs.io/en/latest/api.html#read-buffering
         and specific filesystem documentation for details.
     """,
-    default="default",
-    show_default=True,
+    default=InputParameter.Unset(),
+    show_default=False,
     show_envvar=True,
-    callback=parse_cache_param,
 )
 def main(
     input: str,
@@ -529,8 +504,8 @@ def main(
     date: datetime.datetime,
     debug: bool,
     filename_regex: str,
-    input_compression: str,
-    input_cache: dict,
+    input_compression: str | None | InputParameter.Unset,
+    input_cache: str | None | InputParameter.Unset,
 ):
     """Parse dial log files and repack it to parquet dataset."""
     if debug:
@@ -539,16 +514,20 @@ def main(
     logging.info(f"Input dir: {input}")
     logging.info(f"Output dir: {output}")
     logging.info(f"Date: {date}")
+
+    read_kwargs = InputParameter.create_params_kwargs(
+        compression=input_compression,
+        cache_type=input_cache,
+    )
+    logging.info(f"Read kwargs: {read_kwargs}")
+
     filename_regex_compiled = re.compile(filename_regex)
     parse_logs(
         input,
         output,
         pa.scalar(date, type=pa.date32()),
         filename_regex_compiled,
-        read_kwargs={
-            "compression": input_compression,
-            **input_cache,
-        },
+        read_kwargs=read_kwargs,
     )
 
 
