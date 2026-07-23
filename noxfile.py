@@ -1,3 +1,4 @@
+import os
 import shutil
 from pathlib import Path
 from typing import List
@@ -6,6 +7,8 @@ import nox
 
 nox.options.sessions = ("lint", "tests")
 nox.options.reuse_existing_virtualenvs = True
+if os.environ.get("CI"):
+    nox.options.default_venv_backend = "none"
 
 SRCS = ("src", "tests", "noxfile.py")
 
