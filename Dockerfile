@@ -1,10 +1,8 @@
-FROM python:3.12-alpine3.20 AS builder
+FROM python:3.12-slim AS builder
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-RUN apk update && apk upgrade --no-cache libcrypto3 libssl3
-RUN apk add --no-cache alpine-sdk linux-headers
 RUN pip install --no-cache-dir "poetry==1.8.5"
 RUN python3 -m venv /opt/venv
 
@@ -19,7 +17,7 @@ FROM builder AS test
 RUN poetry install --with test
 RUN poetry run pytest ./tests
 
-FROM python:3.12-alpine3.20
+FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
